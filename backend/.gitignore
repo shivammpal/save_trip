@@ -1,0 +1,15 @@
+# File: .gitignore
+
+# Virtual Environment
+venv/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# IDE / Editor specific folders
+.vscode/
+.idea/
+
+# Environment variables file
+.env

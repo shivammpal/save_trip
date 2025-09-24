@@ -1,0 +1,9 @@
+/* src/index.css */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  background-color: #35373b; 
+  color: #e2e8f0; /* light text color for contrast */
+}
