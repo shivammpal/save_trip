@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     
     #train
     RAPIDAPI_KEY: str
+    RAPIDAPI_HOST: str
     
     #uber 
     UBER_CLIENT_ID: str

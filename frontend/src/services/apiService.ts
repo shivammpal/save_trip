@@ -1,4 +1,4 @@
-// File: src/services/apiService.ts
+// File: src/services/apiService.ts (Updated)
 
 import axios from "axios";
 
@@ -31,6 +31,7 @@ export interface Destination {
 export interface Trip {
   id: string;
   destination: string;
+  source?: string;
   start_date: string;
   end_date: string;
   budget: number;
@@ -42,15 +43,23 @@ export interface Trip {
     latitude: number;
     longitude: number;
   };
-  documents: any[];
+  documents: Document[]; // Changed from any[] to Document[] for better type safety
   packing_list: any[];
 }
 
 interface TripCreatePayload {
   destination: string;
+  source?: string;
   start_date: string;
   end_date: string;
   budget: number;
+}
+export interface Document {
+  public_id: string;
+  secure_url: string;
+  original_filename: string;
+  resource_type: string;
+  created_at: string;
 }
 const apiClient = axios.create({
   baseURL: "http://127.0.0.1:8000",
@@ -127,10 +136,25 @@ export const updateProfile = async (data: UpdateProfilePayload): Promise<UserPro
   }
 };
 
+// --- CORRECTED FUNCTION ---
 export const getTrips = async (): Promise<Trip[]> => {
   try {
-    const response = await apiClient.get<Trip[]>("/trips");
-    return response.data;
+    const response = await apiClient.get<any[]>("/trips");
+
+    const trips: Trip[] = response.data.map((tripData) => {
+      // Ensure the ID exists
+      if (tripData._id && !tripData.id) {
+        tripData.id = tripData._id;
+      }
+      
+      // **THE FIX**: Ensure the documents array always exists to prevent render errors.
+      if (!tripData.documents) {
+        tripData.documents = [];
+      }
+      
+      return tripData as Trip;
+    });
+    return trips;
   } catch (error) {
     if (axios.isAxiosError(error) && error.response) {
       throw new Error(error.response.data.detail || "Failed to fetch trips.");
@@ -152,7 +176,7 @@ export const createTrip = async (data: TripCreatePayload): Promise<Trip> => {
 };
 
 export const searchDestinations = async (query: string): Promise<Destination[]> => {
-  if (query.length < 3) return []; // Don't search for less than 3 characters
+  if (query.length < 3) return [];
   try {
     const response = await apiClient.get<Destination[]>("/destinations/search", {
       params: { query },
@@ -160,9 +184,47 @@ export const searchDestinations = async (query: string): Promise<Destination[]> 
     return response.data;
   } catch (error) {
     console.error("Failed to search destinations:", error);
-    return []; // Return empty array on error
+    return [];
   }
 };
+
+// --- CORRECTED FUNCTION ---
+export const getTrip = async (tripId: string): Promise<Trip> => {
+  try {
+    const response = await apiClient.get<any>(`/trips/${tripId}`);
+    const tripData = response.data;
+
+    // Ensure the `id` field exists
+    if (tripData._id && !tripData.id) {
+      tripData.id = tripData._id;
+    }
+
+    // **THE FIX**: Also apply the fix here for consistency on the details page.
+    if (!tripData.documents) {
+      tripData.documents = [];
+    }
+
+    return tripData as Trip;
+  } catch (error) {
+    if (axios.isAxiosError(error) && error.response) {
+      throw new Error(error.response.data.detail || "Failed to fetch trip details.");
+    }
+    throw new Error("An unexpected error occurred while fetching trip details.");
+  }
+};
+
+export const deleteTrip = async (tripId: string): Promise<void> => {
+  try {
+    await apiClient.delete(`/trips/${tripId}`);
+  } catch (error) {
+    if (axios.isAxiosError(error) && error.response) {
+      throw new Error(error.response.data.detail || "Failed to delete trip.");
+    }
+    throw new Error("An unexpected error occurred while deleting the trip.");
+  }
+};
+
+// ... (Rest of the file is unchanged) ...
 
 // Transport service interfaces
 export interface FlightSegment {
@@ -187,6 +249,8 @@ export interface TrainOffer {
   arrival_time: string;
   duration: string;
   available_classes: string[];
+  price: number;
+  currency: string;
 }
 
 export interface RideEstimate {
@@ -216,40 +280,35 @@ export const searchFlights = async (
   max_price?: number
 ): Promise<FlightOffer[]> => {
   try {
-    // Use the test endpoint temporarily to avoid authentication issues
     const response = await apiClient.get<FlightOffer[]>("/transport/flights/search", {
       params: { origin, destination, departure_date, max_price },
     });
     return response.data;
   } catch (error) {
     console.error("Failed to search flights:", error);
-
-    // Handle specific error cases
-    if (axios.isAxiosError(error) && error.response) {
-      const status = error.response.status;
-      const errorMessage = error.response.data.detail || error.message;
-
+    if (axios.isAxiosError(error)) {
+      const status = error.response?.status;
+      const errorMessage = error.response?.data?.detail ?? error.message ?? "Unknown error";
       if (status === 400) {
-        // Handle validation errors (like past dates)
         throw new Error(`Flight search error: ${errorMessage}`);
       } else if (status === 500) {
-        // Handle server errors
         throw new Error("Flight search service is temporarily unavailable. Please try again later.");
+      } else {
+        throw new Error(errorMessage);
       }
     }
-
-    throw error;
+    throw new Error(error instanceof Error ? error.message : "An unknown error occurred during flight search.");
   }
 };
 
 export const searchTrains = async (
-  origin: string,
-  destination: string,
-  departure_date: string
+  train_number_date?: string,
+  train_number_name?: string,
+  max_price?: number
 ): Promise<TrainOffer[]> => {
   try {
     const response = await apiClient.get<TrainOffer[]>("/transport/trains/search", {
-      params: { origin, destination, departure_date },
+      params: { train_number_date, train_number_name, max_price },
     });
     return response.data;
   } catch (error) {
@@ -289,5 +348,96 @@ export const searchHotels = async (
   } catch (error) {
     console.error("Failed to search hotels:", error);
     throw error;
+  }
+};
+
+export const getUploadSignature = async (): Promise<{ signature: string; timestamp: number; api_key: string }> => {
+  const response = await apiClient.post("/documents/signature");
+  return response.data;
+};
+
+export const addDocumentToTrip = async (tripId: string, docData: Omit<Document, 'created_at'>): Promise<Document> => {
+  const response = await apiClient.post<Document>(`/documents/trips/${tripId}`, docData);
+  return response.data;
+};
+
+export const deleteDocument = async (tripId: string, publicId: string): Promise<void> => {
+    await apiClient.delete(`/documents/trips/${tripId}/${publicId}`);
+};
+
+// Itinerary interfaces
+export interface ItineraryItemCreate {
+  day: number;
+  description: string;
+  cost: number;
+  location_name: string;
+}
+
+export interface ItineraryItem extends ItineraryItemCreate {
+  id: string;
+  location_coords?: {
+    latitude: number;
+    longitude: number;
+  };
+}
+
+// Itinerary API functions
+export const addItineraryItem = async (tripId: string, item: ItineraryItemCreate): Promise<ItineraryItem> => {
+  try {
+    const response = await apiClient.post<ItineraryItem>(`/trips/${tripId}/itinerary`, item);
+    return response.data;
+  } catch (error) {
+    if (axios.isAxiosError(error) && error.response) {
+      throw new Error(error.response.data.detail || "Failed to add itinerary item.");
+    }
+    throw new Error("An unexpected error occurred while adding itinerary item.");
+  }
+};
+
+export const updateItineraryItem = async (tripId: string, itemId: string, item: ItineraryItemCreate): Promise<ItineraryItem> => {
+  try {
+    const response = await apiClient.put<ItineraryItem>(`/trips/${tripId}/itinerary/${itemId}`, item);
+    return response.data;
+  } catch (error) {
+    if (axios.isAxiosError(error) && error.response) {
+      throw new Error(error.response.data.detail || "Failed to update itinerary item.");
+    }
+    throw new Error("An unexpected error occurred while updating itinerary item.");
+  }
+};
+
+export const deleteItineraryItem = async (tripId: string, itemId: string): Promise<void> => {
+  try {
+    await apiClient.delete(`/trips/${tripId}/itinerary/${itemId}`);
+  } catch (error) {
+    if (axios.isAxiosError(error) && error.response) {
+      throw new Error(error.response.data.detail || "Failed to delete itinerary item.");
+    }
+    throw new Error("An unexpected error occurred while deleting itinerary item.");
+  }
+};
+
+// Recommendations interface
+export interface Recommendation {
+  name: string;
+  description: string;
+  estimated_cost: number;
+}
+
+export interface RecommendationsResponse {
+  recommendations?: Recommendation[];
+  message?: string;
+}
+
+// Recommendations API function
+export const getTripRecommendations = async (tripId: string): Promise<RecommendationsResponse> => {
+  try {
+    const response = await apiClient.get<RecommendationsResponse>(`/trips/${tripId}/recommendations`);
+    return response.data;
+  } catch (error) {
+    if (axios.isAxiosError(error) && error.response) {
+      throw new Error(error.response.data.detail || "Failed to fetch recommendations.");
+    }
+    throw new Error("An unexpected error occurred while fetching recommendations.");
   }
 };

@@ -37,14 +37,17 @@ async def add_itinerary_item(
     item: ItineraryItemCreate,
     current_user: UserInDB = Depends(get_current_user)
 ):
-    """Adds a new item to a trip's itinerary and geocodes its location if provided."""
+    """Adds a new item to a trip's itinerary and geocodes its location if provided. Validates location legitimacy."""
     await _get_trip_and_verify_owner(trip_id, current_user)
 
-    # --- NEW GEOCODING LOGIC ---
+    # --- NEW GEOCODING LOGIC WITH VALIDATION ---
     coords = None
     if item.location_name:
         # If a location name is provided, get its coordinates
         coords = await geo_service.get_coords_for_location(item.location_name)
+        if not coords:
+            # If geocoding fails, reject the addition as invalid location
+            raise HTTPException(status_code=400, detail=f"Invalid location: '{item.location_name}' could not be found. Please provide a valid location name.")
     # --- END OF NEW LOGIC ---
 
     # Create the full ItineraryItem, including the coordinates if found

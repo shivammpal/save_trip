@@ -1,4 +1,4 @@
-# File: app/routers/transport.py (Updated)
+# File: app/routers/transport.py
 
 from fastapi import APIRouter, Depends, Query
 from typing import List, Optional
@@ -7,9 +7,7 @@ import asyncio
 
 from app.models.user import UserInDB
 from app.core.dependencies import get_current_user
-# Import flight service and models
 from app.services.flight_service import search_flights, FlightOffer
-# NEW: Import train service and models
 from app.services.train_service import search_trains, TrainOffer
 from app.services import ride_service
 from app.services.ride_service import RideEstimate
@@ -20,22 +18,20 @@ router = APIRouter(
     tags=["Transport"]
 )
 
-# --- Test endpoint to check if router is working ---
 @router.get("/test")
 async def test_transport():
     """Test endpoint to verify transport router is working."""
     return {"message": "Transport router is working!"}
 
-# --- Existing Flight Search Endpoint ---
 @router.get("/flights/search", response_model=List[FlightOffer])
 async def find_flights(
-    origin: str = Query(..., min_length=3, description="Origin city (e.g., 'London')"),
-    destination: str = Query(..., min_length=3, description="Destination city (e.g., 'Paris')"),
-    departure_date: date = Query(..., description="Departure date in YYYY-MM-DD format"),
-    max_price: Optional[int] = Query(None, description="Optional maximum price in USD"),
+    origin: str = Query(..., min_length=3),
+    destination: str = Query(..., min_length=3),
+    departure_date: date = Query(...),
+    max_price: Optional[int] = Query(None),
     current_user: UserInDB = Depends(get_current_user)
 ):
-    """Searches for flight offers based on user criteria."""
+    """Search flight offers based on user criteria."""
     return await search_flights(
         origin=origin,
         destination=destination,
@@ -43,57 +39,47 @@ async def find_flights(
         max_price=max_price
     )
 
-# --- NEW: Train Search Endpoint ---
 @router.get("/trains/search", response_model=List[TrainOffer])
 async def find_trains(
-    origin: str = Query(..., min_length=3, description="Origin city (e.g., 'Mumbai')"),
-    destination: str = Query(..., min_length=3, description="Destination city (e.g., 'Delhi')"),
-    departure_date: date = Query(..., description="Departure date in YYYY-MM-DD format"),
+    train_number_date: Optional[str] = Query(None),
+    train_number_name: Optional[str] = Query(None),
+    max_price: Optional[int] = Query(None),
     current_user: UserInDB = Depends(get_current_user)
 ):
-    """Searches for trains between stations based on user criteria."""
+    """Search trains by status or info."""
     return await search_trains(
-        origin=origin,
-        destination=destination,
-        departure_date=departure_date.strftime('%Y-%m-%d')
+        train_number_date=train_number_date,
+        train_number_name=train_number_name,
+        max_price=max_price
     )
 
 @router.get("/rides/search", response_model=List[RideEstimate])
 async def find_ride_estimates(
-    start_lat: float = Query(..., description="Starting latitude"),
-    start_lon: float = Query(..., description="Starting longitude"),
-    end_lat: float = Query(..., description="Ending latitude"),
-    end_lon: float = Query(..., description="Ending longitude"),
+    start_lat: float = Query(...),
+    start_lon: float = Query(...),
+    end_lat: float = Query(...),
+    end_lon: float = Query(...),
     current_user: UserInDB = Depends(get_current_user)
 ):
-    """
-    Searches for ride estimates from multiple providers (Uber, Ola, etc.).
-    """
-    # Run all our estimate functions concurrently for a faster response
-    uber_task = ride_service.get_uber_estimates(start_lat, start_lon, end_lat, end_lon)
-    ola_task = ride_service.get_ola_estimates(start_lat, start_lon, end_lat, end_lon)
-    taxi_task = ride_service.get_taxi_estimates(start_lat, start_lon, end_lat, end_lon)
-
-    # Wait for all tasks to complete
-    results = await asyncio.gather(uber_task, ola_task, taxi_task)
-
-    # Combine the lists of results into a single list
+    """Search for ride estimates from multiple providers."""
+    results = await asyncio.gather(
+        ride_service.get_uber_estimates(start_lat, start_lon, end_lat, end_lon),
+        ride_service.get_ola_estimates(start_lat, start_lon, end_lat, end_lon),
+        ride_service.get_taxi_estimates(start_lat, start_lon, end_lat, end_lon)
+    )
+    # Flatten results
     all_estimates = [estimate for provider_list in results for estimate in provider_list]
-
     return all_estimates
 
-# --- NEW: Hotel Search Endpoint ---
 @router.get("/hotels/search", response_model=List[HotelOffer])
 async def find_hotels(
-    city: str = Query(..., min_length=3, description="City to search for hotels in (e.g., 'Paris')"),
-    check_in_date: date = Query(..., description="Check-in date in YYYY-MM-DD format"),
-    check_out_date: date = Query(..., description="Check-out date in YYYY-MM-DD format"),
-    adults: int = Query(1, ge=1, description="Number of adults"),
+    city: str = Query(..., min_length=3),
+    check_in_date: date = Query(...),
+    check_out_date: date = Query(...),
+    adults: int = Query(1, ge=1),
     current_user: UserInDB = Depends(get_current_user)
 ):
-    """
-    Searches for hotel offers in a given city for specific dates.
-    """
+    """Search hotel offers for a given city and dates."""
     return await search_for_hotels(
         city_name=city,
         check_in_date=check_in_date.strftime('%Y-%m-%d'),

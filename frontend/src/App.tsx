@@ -8,11 +8,14 @@ import { ProtectedRoute } from "./components/ProtectedRoute";
 import { AuthCallbackPage } from "./pages/AuthCallbackPage";
 import { ProfilePage } from "./pages/ProfilePage";
 import { TravelPage } from "./pages/TravelPage";
+import { TripDetailsPage } from "./pages/TripDetailsPage";
+import { DocumentsPage } from "./pages/DocumentsPage";
 
 function App() {
   return (
     <Layout>
       <Routes>
+        <Route path="/trips/:tripId/documents" element={<ProtectedRoute><DocumentsPage /></ProtectedRoute>} />
         <Route path="/" element={<HomePage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
@@ -37,9 +40,18 @@ function App() {
             </ProtectedRoute>
           }
         />
+        <Route
+          path="/trips/:tripId"
+          element={
+            <ProtectedRoute>
+              <TripDetailsPage />
+            </ProtectedRoute>
+          }
+        />
       </Routes>
     </Layout>
   );
 }
 
 export default App;
+

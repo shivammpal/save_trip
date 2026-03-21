@@ -1,108 +1,102 @@
-# File: app/routers/documents.py
+# File: app/routers/documents.py (Corrected)
 
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, status
 from bson import ObjectId
 import cloudinary
 import cloudinary.uploader
-from typing import List 
+import time
 
-from app.core.config import settings
-from app.models.user import UserInDB
-from app.models.document import Document
 from app.core.dependencies import get_current_user
 from app.core.database import trips_collection
+from app.models.user import UserInDB
+from app.models.document import Document, DocumentCreate
+from app.core.config import settings # <-- FIX 1: Import 'settings' object
 
-# --- Configure Cloudinary ---
-# This uses the credentials from your .env file to connect to your account
+# Configure Cloudinary using the settings object
 cloudinary.config(
-    cloud_name = settings.CLOUDINARY_CLOUD_NAME,
-    api_key = settings.CLOUDINARY_API_KEY,
-    api_secret = settings.CLOUDINARY_API_SECRET
+    cloud_name=settings.CLOUDINARY_CLOUD_NAME,
+    api_key=settings.CLOUDINARY_API_KEY,
+    api_secret=settings.CLOUDINARY_API_SECRET,
+    secure=True
 )
 
 router = APIRouter(
-    prefix="/trips/{trip_id}/documents",
+    prefix="/documents",
     tags=["Documents"]
 )
 
-# Helper function to get a trip and verify ownership
-async def _get_trip_and_verify_owner(trip_id: str, current_user: UserInDB):
+@router.post("/signature", status_code=status.HTTP_200_OK)
+async def get_upload_signature(current_user: UserInDB = Depends(get_current_user)):
+    """
+    Generates a signed signature for direct frontend uploads to Cloudinary.
+    """
+    timestamp = int(time.time())
+    params_to_sign = {"timestamp": timestamp}
+    
+    signature = cloudinary.utils.api_sign_request(
+        params_to_sign, settings.CLOUDINARY_API_SECRET # <-- FIX 2: Use settings.
+    )
+
+    return {
+        "signature": signature, 
+        "timestamp": timestamp, 
+        "api_key": settings.CLOUDINARY_API_KEY # <-- FIX 3: Use settings.
+    }
+
+@router.post("/trips/{trip_id}", status_code=status.HTTP_201_CREATED, response_model=Document)
+async def add_document_to_trip(
+    trip_id: str,
+    document_data: DocumentCreate,
+    current_user: UserInDB = Depends(get_current_user)
+):
+    """
+    Saves the metadata of a successfully uploaded document to a trip.
+    This is called *after* the frontend uploads the file to Cloudinary.
+    """
     try:
         object_id = ObjectId(trip_id)
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid trip ID format")
 
-    trip = await trips_collection.find_one({"_id": object_id})
-    if trip is None or trip["owner_email"] != current_user.email:
+    trip = await trips_collection.find_one({"_id": object_id, "owner_email": current_user.email})
+    if not trip:
         raise HTTPException(status_code=404, detail="Trip not found")
-    return trip
 
-
-@router.post("/upload", response_model=Document, status_code=status.HTTP_201_CREATED)
-async def upload_document(
-    trip_id: str,
-    current_user: UserInDB = Depends(get_current_user),
-    file: UploadFile = File(...)
-):
-    """Uploads a new document (e.g., ticket, visa) for a trip."""
-    await _get_trip_and_verify_owner(trip_id, current_user)
-
-    try:
-        # Upload the file to Cloudinary
-        upload_result = cloudinary.uploader.upload(
-            file.file,
-            resource_type="auto", # Automatically detect file type (image, pdf, etc.)
-            folder=f"trip_planner/{trip_id}" # Organize files into folders per trip
-        )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error uploading file to cloud: {e}")
-
-    # Create our document metadata object
-    new_document = Document(
-        public_id=upload_result.get("public_id"),
-        file_name=file.filename,
-        secure_url=upload_result.get("secure_url")
-    )
+    new_document = Document(**document_data.model_dump())
     
-    # Add the document metadata to the trip's document list in MongoDB
     await trips_collection.update_one(
-        {"_id": ObjectId(trip_id)},
-        {"$push": {"documents": new_document.model_dump()}}
+        {"_id": object_id},
+        {"$addToSet": {"documents": new_document.model_dump()}}
     )
-
     return new_document
 
-@router.get("/", response_model=List[Document])
-async def list_documents(
+@router.delete("/trips/{trip_id}/{public_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_document_from_trip(
     trip_id: str,
+    public_id: str,
     current_user: UserInDB = Depends(get_current_user)
 ):
-    """Lists all documents for a specific trip."""
-    trip = await _get_trip_and_verify_owner(trip_id, current_user)
-    return trip.get("documents", [])
-
-
-@router.delete("/{public_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_document(
-    trip_id: str,
-    public_id: str, # This is the unique ID from Cloudinary
-    current_user: UserInDB = Depends(get_current_user)
-):
-    """Deletes a document from Cloudinary and our database."""
-    await _get_trip_and_verify_owner(trip_id, current_user)
-
-    # 1. Delete the file from Cloudinary
     try:
-        cloudinary.uploader.destroy(public_id, resource_type="auto")
-    except Exception as e:
-        # If Cloudinary fails, we still proceed to delete from our DB
-        # but log the error. In a real app, you might handle this differently.
-        print(f"Could not delete file from Cloudinary: {e}")
-
-    # 2. Remove the document metadata from our database
-    await trips_collection.update_one(
-        {"_id": ObjectId(trip_id)},
+        object_id = ObjectId(trip_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid trip ID format")
+    
+    # Remove from MongoDB
+    result = await trips_collection.update_one(
+        {"_id": object_id, "owner_email": current_user.email},
         {"$pull": {"documents": {"public_id": public_id}}}
     )
     
-    return None # No content response
+    if result.modified_count == 0:
+        raise HTTPException(status_code=404, detail="Document not found in trip")
+
+    # Delete from Cloudinary
+    try:
+        # You might need to specify resource_type if you upload non-images
+        cloudinary.uploader.destroy(public_id, invalidate=True)
+    except Exception as e:
+        # Log the error, but don't fail the request if it's already removed from our DB
+        print(f"Could not delete {public_id} from Cloudinary: {e}")
+        
+    return None
+

@@ -1,4 +1,4 @@
-// File: src/pages/ProfilePage.tsx (Updated)
+// File: src/pages/ProfilePage.tsx (Dark Navy Background Version)
 
 import { useState, useEffect } from "react";
 import { getProfile, updateProfile } from "../services/apiService";
@@ -11,8 +11,6 @@ export const ProfilePage = () => {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
-  // State for managing edit mode
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState({ name: "", age: "" });
 
@@ -47,7 +45,7 @@ export const ProfilePage = () => {
       };
       await updateProfile(payload);
       setIsEditing(false);
-      await fetchProfile(); // Re-fetch data to show the latest updates
+      await fetchProfile();
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -55,84 +53,131 @@ export const ProfilePage = () => {
     }
   };
 
-  if (isLoading && !profile) return <div className="text-center mt-10">Loading profile...</div>;
-  if (error) return <div className="text-red-500 text-center mt-10">Error: {error}</div>;
-  if (!profile) return <div className="text-center mt-10">Could not load profile data.</div>;
+  if (isLoading && !profile)
+    return <div className="text-center mt-10 text-gray-400">Loading profile...</div>;
+  if (error)
+    return <div className="text-red-500 text-center mt-10">Error: {error}</div>;
+  if (!profile)
+    return <div className="text-center mt-10 text-gray-400">Could not load profile data.</div>;
 
   return (
-    <div className="max-w-4xl mx-auto">
-      <div className="bg-gray-900 p-8 rounded-lg shadow-md">
-        <div className="flex justify-between items-center mb-6">
-          <h1 className="text-3xl font-bold text-white">Your Profile</h1>
+    <div
+      className="min-h-screen flex justify-center items-center px-6 py-12"
+      style={{ backgroundColor: "#1B2233" }} // 🎨 Dark navy tone from your image
+    >
+      <div className="max-w-3xl w-full bg-[#0f1524]/90 backdrop-blur-xl border border-[#2a3247] shadow-[0_0_25px_rgba(80,80,255,0.1)] rounded-3xl p-10 transition-all">
+        <div className="flex justify-between items-center mb-8 border-b border-gray-800 pb-5">
+          <h1 className="text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-violet-500">
+            Your Profile
+          </h1>
           {!isEditing && (
-            <button onClick={() => setIsEditing(true)} className="text-sm font-medium text-blue-600 hover:text-blue-800">
-              Edit Profile
+            <button
+              onClick={() => setIsEditing(true)}
+              className="px-4 py-2 rounded-lg text-sm font-medium text-indigo-400 hover:text-white hover:bg-indigo-600/30 transition-all"
+            >
+              ✏️ Edit
             </button>
           )}
         </div>
 
         {isEditing ? (
-          // EDITING VIEW
-          <form onSubmit={handleSave} className="space-y-4">
+          <form onSubmit={handleSave} className="space-y-6">
             <div>
-              <label className="block text-sm font-medium text-white">Name</label>
-              <Input
+              <label className="block text-sm font-semibold text-gray-300 mb-2">
+                Name
+              </label>
+              <input
                 type="text"
                 name="name"
                 value={formData.name}
                 onChange={handleInputChange}
-                className="bg-black border border-indigo-500 text-white focus:ring-blue-500 focus:border-blue-500"
+                className="w-full px-4 py-2 rounded-xl bg-[#151c2e]/90 border border-transparent text-white placeholder-gray-500 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/60 transition-all"
+                placeholder="Enter your name"
               />
             </div>
+
             <div>
-              <label className="block text-sm font-medium text-white">Age</label>
-              <Input
+              <label className="block text-sm font-semibold text-gray-300 mb-2">
+                Age
+              </label>
+              <input
                 type="number"
                 name="age"
                 value={formData.age}
                 onChange={handleInputChange}
-                className="bg-black border border-indigo-500 text-white focus:ring-blue-500 focus:border-blue-500"
+                className="w-full px-4 py-2 rounded-xl bg-[#151c2e]/90 border border-transparent text-white placeholder-gray-500 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/60 transition-all"
+                placeholder="Enter your age"
               />
             </div>
-            <div className="flex space-x-4">
-              <Button type="submit" isLoading={isLoading}>Save Changes</Button>
-              <Button type="button" variant="secondary" onClick={() => setIsEditing(false)}>
+
+            <div className="flex items-center gap-4 pt-4">
+              <button
+                type="submit"
+                disabled={isLoading}
+                className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-indigo-500 to-violet-500 hover:from-indigo-600 hover:to-violet-600 text-white font-semibold shadow-md transition-all"
+              >
+                {isLoading ? "Saving..." : "Save Changes"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsEditing(false)}
+                className="px-6 py-2.5 rounded-xl bg-gray-700/60 hover:bg-gray-600 text-white font-semibold transition-all"
+              >
                 Cancel
-              </Button>
+              </button>
             </div>
           </form>
         ) : (
-          // DISPLAY VIEW
-          <>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
+          <div className="space-y-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
               <div>
-              <label className="block text-sm font-medium text-white">Email</label>
-              <p className="text-lg text-white">{profile.email}</p>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-white">Name</label>
-              <p className="text-lg text-white">{profile.name || "Not set"}</p>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-white">Age</label>
-              <p className="text-lg text-white">{profile.age || "Not set"}</p>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-white">Points</label>
-              <p className="text-lg font-bold text-indigo-300">{profile.points}</p>
-            </div>
-            </div>
-            <div className="mt-8">
-              <label className="block text-sm font-medium text-white mb-2">Badges</label>
+                <label className="block text-sm font-semibold text-gray-400 mb-1">
+                  Email
+                </label>
+                <p className="text-lg text-white">{profile.email}</p>
+              </div>
               <div>
+                <label className="block text-sm font-semibold text-gray-400 mb-1">
+                  Name
+                </label>
+                <p className="text-lg text-white">{profile.name || "Not set"}</p>
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-gray-400 mb-1">
+                  Age
+                </label>
+                <p className="text-lg text-white">{profile.age || "Not set"}</p>
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-gray-400 mb-1">
+                  Points
+                </label>
+                <p className="text-2xl font-bold text-indigo-400">{profile.points}</p>
+              </div>
+            </div>
+
+            <div className="border-t border-gray-800 pt-6">
+              <label className="block text-sm font-semibold text-gray-400 mb-2">
+                Badges
+              </label>
+              <div className="flex flex-wrap gap-3">
                 {profile.badges.length > 0 ? (
-                  profile.badges.map((badge) => <Badge key={badge}>{badge}</Badge>)
+                  profile.badges.map((badge) => (
+                    <Badge
+                      key={badge}
+                      className="bg-gradient-to-r from-indigo-600/80 to-violet-600/80 text-white border border-indigo-400 rounded-full shadow-sm px-3 py-1"
+                    >
+                      {badge}
+                    </Badge>
+                  ))
                 ) : (
-                  <p className="text-indigo-300">No badges earned yet. Create a trip to get your first one!</p>
+                  <p className="text-indigo-300 text-sm">
+                    No badges earned yet. Create a trip to get your first one!
+                  </p>
                 )}
               </div>
             </div>
-          </>
+          </div>
         )}
       </div>
     </div>
