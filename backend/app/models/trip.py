@@ -28,6 +28,7 @@ class TripBase(BaseModel):
     destination_coords: Optional[Coordinates] = None
     documents: List[Document] = []
     packing_list: List[PackingListItem] = []
+    recommendations: Optional[dict] = None
 
 class TripCreate(BaseModel):
     destination: str = Field(..., min_length=1, example="Paris, France")

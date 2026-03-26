@@ -21,3 +21,4 @@ users_collection = db.get_collection("users")
 trips_collection = db.get_collection("trips")
 
 packing_list_templates_collection = db.get_collection("packing_list_templates")
+messages_collection = db.get_collection("messages")

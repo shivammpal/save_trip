@@ -27,3 +27,17 @@ async def websocket_endpoint(websocket: WebSocket, trip_id: str):
         # When the client disconnects, this exception is raised
         connection_manager.disconnect(websocket, trip_id)
         print(f"Client disconnected from trip {trip_id}")
+
+@router.websocket("/chat/{email}")
+async def chat_websocket_endpoint(websocket: WebSocket, email: str):
+    """
+    Handles global WebSocket connections for 1-on-1 chat.
+    """
+    await connection_manager.connect_personal(websocket, email)
+    try:
+        while True:
+            # Keep line alive
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        connection_manager.disconnect_personal(websocket, email)
+        print(f"User {email} disconnected from global chat")

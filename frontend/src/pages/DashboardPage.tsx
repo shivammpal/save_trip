@@ -21,6 +21,7 @@ export const DashboardPage = () => {
     budget: 0,
   });
   const [formError, setFormError] = useState<string | null>(null);
+  const [isGeneratingTrip, setIsGeneratingTrip] = useState(false);
 
   // Search state
   const [searchTimeout, setSearchTimeout] = useState<number | null>(null);
@@ -73,13 +74,17 @@ export const DashboardPage = () => {
   const handleSubmitNewTrip = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormError(null);
+    setIsModalOpen(false); // Optimistically close modal
+    setIsGeneratingTrip(true); // Show generating card
+
     try {
       await createTrip(newTripData);
-      setIsModalOpen(false);
       setNewTripData({ destination: "", source: "", start_date: "", end_date: "", budget: 0 });
       await fetchTrips();
     } catch (err) {
-      setFormError((err as Error).message);
+      alert(`Failed to create trip: ${(err as Error).message}`);
+    } finally {
+      setIsGeneratingTrip(false);
     }
   };
 
@@ -106,8 +111,21 @@ export const DashboardPage = () => {
       </div>
 
       {/* Trips Section */}
-      {trips.length > 0 ? (
+      {trips.length > 0 || isGeneratingTrip ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
+          {/* Optimistic UI Placeholder */}
+          {isGeneratingTrip && (
+            <div className="relative overflow-hidden rounded-2xl bg-gray-800 border border-blue-500/30 shadow-2xl backdrop-blur-md transition-all h-[250px] flex flex-col justify-center items-center animate-pulse">
+              <div className="text-4xl mb-3">✨</div>
+              <h3 className="text-xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-400">
+                Generating Trip...
+              </h3>
+              <p className="text-gray-400 mt-2 text-sm text-center px-4">
+                Our AI is planning your perfect itinerary. Hang tight!
+              </p>
+            </div>
+          )}
+
           {trips.map((trip) => (
             <div key={trip.id} className="transition-transform transform hover:scale-[1.02] hover:shadow-2xl">
               <TripCard trip={trip} onDelete={handleDeleteTrip} />

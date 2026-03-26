@@ -10,8 +10,7 @@ from typing import List
 from app.services import geo_service
 from app.models.common import Coordinates
 from app.services.hotel_service import search_for_hotels, HotelOffer
-from app.services.ai_service import generate_itinerary_for_trip
-
+from app.services.ai_service import generate_itinerary_for_trip, get_recommendations_for_trip
 class ItineraryPin(BaseModel):
     name: str
     coords: Coordinates
@@ -57,13 +56,30 @@ async def create_trip(
 
     # Generate AI itinerary for the trip
     trip_for_ai = TripInDB(**trip_data)
-    itinerary_items = await generate_itinerary_for_trip(trip_for_ai)
+    generated_items = await generate_itinerary_for_trip(trip_for_ai)
+    
+    from app.models.activity import ItineraryItem
+    itinerary_items = []
+    if generated_items:
+        for item in generated_items:
+            itinerary_items.append(ItineraryItem(**item).model_dump(exclude_none=True))
 
     if itinerary_items:
         await trips_collection.update_one(
             {"_id": new_trip_id},
             {"$set": {"itinerary": itinerary_items}}
         )
+        
+    # Generate AI recommendations for the trip
+    try:
+        recommendations = await get_recommendations_for_trip(trip_for_ai)
+        if recommendations:
+            await trips_collection.update_one(
+                {"_id": new_trip_id},
+                {"$set": {"recommendations": recommendations}}
+            )
+    except Exception as e:
+        print(f"Failed to generate initial recommendations: {e}")
 
     final_trip = await trips_collection.find_one({"_id": new_trip_id})
 
@@ -93,6 +109,20 @@ async def get_trip(
 
     if trip is None or trip.get("owner_email") != current_user.email:
         raise HTTPException(status_code=404, detail="Trip not found")
+
+    # --- LAZY MIGRATION FOR MISSING IDs ---
+    needs_update = False
+    import uuid
+    for item in trip.get("itinerary", []):
+        if "id" not in item:
+            item["id"] = uuid.uuid4()
+            needs_update = True
+    if needs_update:
+        await trips_collection.update_one(
+            {"_id": object_id}, 
+            {"$set": {"itinerary": trip["itinerary"]}}
+        )
+    # --- END MIGRATION ---
 
     # --- UPDATED ---
     # Explicitly validate the raw data against the response model.

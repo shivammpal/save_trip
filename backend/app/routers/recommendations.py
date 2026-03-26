@@ -32,10 +32,21 @@ async def get_trip_recommendations(
     if trip_doc is None or trip_doc["owner_email"] != current_user.email:
         raise HTTPException(status_code=404, detail="Trip not found")
 
+    # If recommendations are already cached in DB, return them
+    if "recommendations" in trip_doc and trip_doc["recommendations"]:
+        return trip_doc["recommendations"]
+
     # Convert the dictionary from DB to a Pydantic model for our service
     trip = TripInDB(**trip_doc)
 
     # Call the AI service to get recommendations
     recommendations = await get_recommendations_for_trip(trip)
+    
+    # Save the generated recommendations to the database for future requests
+    if recommendations:
+        await trips_collection.update_one(
+            {"_id": object_id},
+            {"$set": {"recommendations": recommendations}}
+        )
 
     return recommendations

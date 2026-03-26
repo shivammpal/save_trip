@@ -16,6 +16,7 @@ from app.routers.transport import router as transport_router
 from app.routers.packing import router as packing_router, templates_router as packing_templates_router
 from app.routers.websockets import router as websockets_router
 from app.routers.documents import router as documents_router
+from app.routers.chat import router as chat_router
 
 # Create an instance of the FastAPI application
 app = FastAPI(
@@ -50,6 +51,7 @@ app.include_router(packing_templates_router)
 app.include_router(packing_router)
 app.include_router(websockets_router)
 app.include_router(documents_router)
+app.include_router(chat_router)
 
 # Root endpoint for health checks
 @app.get("/", tags=["Root"])

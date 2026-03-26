@@ -120,6 +120,7 @@ async def generate_itinerary_for_trip(trip: TripInDB) -> list:
     Requirements:
     - Create 2-4 activities per day.
     - Each activity must have a realistic cost that fits the budget.
+    - Include explicitly in the itinerary activities like meals (breakfast, lunch, dinner) and traveling (transit between locations or from anywhere to anywhere) with estimated costs.
     - Include a mix of sightseeing, food, culture, and relaxation.
     - Provide specific location names for each activity.
     - Total costs should not exceed the budget.

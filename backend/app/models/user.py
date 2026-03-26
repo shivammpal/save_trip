@@ -30,11 +30,26 @@ class UserInDB(BaseModel):
     badges: List[str] = []
     # NEW: Role field
     role: str = "user"
+    bio: Optional[str] = None
+    profile_picture: Optional[str] = None
+    banner_picture: Optional[str] = None
+    location: Optional[str] = None
+    twitter_url: Optional[str] = None
+    instagram_url: Optional[str] = None
+    # NEW: Chat Privacy Fields
+    user_id: Optional[str] = None
+    contacts: List[str] = []
 
 class UpdateUserProfile(BaseModel):
     name: Optional[str] = None
     age: Optional[int] = None
     travel_preferences: Optional[List[str]] = None
+    bio: Optional[str] = None
+    profile_picture: Optional[str] = None
+    banner_picture: Optional[str] = None
+    location: Optional[str] = None
+    twitter_url: Optional[str] = None
+    instagram_url: Optional[str] = None
 
 class UserProfile(BaseModel):
     email: EmailStr
@@ -46,6 +61,15 @@ class UserProfile(BaseModel):
     badges: List[str]
     # NEW: Role field
     role: str
+    bio: Optional[str] = None
+    profile_picture: Optional[str] = None
+    banner_picture: Optional[str] = None
+    location: Optional[str] = None
+    twitter_url: Optional[str] = None
+    instagram_url: Optional[str] = None
+    # NEW: Chat Privacy Fields
+    user_id: Optional[str] = None
+    contacts: List[str] = []
 
     class Config:
         from_attributes = True

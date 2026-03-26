@@ -10,12 +10,14 @@ export interface UserProfile {
   points: number;
   badges: string[];
   role: string;
-}
-
-// Define the shape of the data we send for an update
-interface UpdateProfilePayload {
-  name?: string;
-  age?: number;
+  bio?: string;
+  profile_picture?: string;
+  banner_picture?: string;
+  location?: string;
+  twitter_url?: string;
+  instagram_url?: string;
+  user_id?: string;
+  contacts?: string[];
 }
 
 interface LoginResponse {
@@ -124,15 +126,27 @@ export const getProfile = async (): Promise<UserProfile> => {
   }
 };
 
-export const updateProfile = async (data: UpdateProfilePayload): Promise<UserProfile> => {
+export const updateProfile = async (profileData: Partial<UserProfile>): Promise<UserProfile> => {
   try {
-    const response = await apiClient.put<UserProfile>("/profile/me", data);
+    const response = await apiClient.put<UserProfile>('/profile/me', profileData);
     return response.data;
   } catch (error) {
     if (axios.isAxiosError(error) && error.response) {
       throw new Error(error.response.data.detail || "Failed to update profile.");
     }
-    throw new Error("An unexpected error occurred while updating the profile.");
+    throw new Error("An unexpected error occurred while updating profile.");
+  }
+};
+
+export const claimUserId = async (userId: string): Promise<UserProfile> => {
+  try {
+    const response = await apiClient.post<UserProfile>('/profile/userid', { user_id: userId });
+    return response.data;
+  } catch (error) {
+    if (axios.isAxiosError(error) && error.response) {
+      throw new Error(error.response.data.detail || "Failed to claim User ID.");
+    }
+    throw new Error("An unexpected error occurred while claiming User ID.");
   }
 };
 
@@ -368,9 +382,11 @@ export const deleteDocument = async (tripId: string, publicId: string): Promise<
 // Itinerary interfaces
 export interface ItineraryItemCreate {
   day: number;
+  time?: string;
   description: string;
   cost: number;
   location_name: string;
+  visited?: boolean;
 }
 
 export interface ItineraryItem extends ItineraryItemCreate {
@@ -441,3 +457,59 @@ export const getTripRecommendations = async (tripId: string): Promise<Recommenda
     throw new Error("An unexpected error occurred while fetching recommendations.");
   }
 };
+
+// ==========================
+// Chat API
+// ==========================
+
+export interface ChatUser {
+  name: string;
+  email: string;
+}
+
+export interface ChatMessage {
+  id?: string;
+  _id?: string;
+  text?: string;
+  message_type?: string;
+  file_url?: string;
+  sender_email: string;
+  receiver_email: string;
+  timestamp?: string;
+}
+
+export const getChatUsers = async (): Promise<ChatUser[]> => {
+  const response = await apiClient.get<ChatUser[]>('/chat/users');
+  return response.data;
+};
+
+export const getChatHistory = async (otherEmail: string): Promise<ChatMessage[]> => {
+  const response = await apiClient.get<ChatMessage[]>(`/chat/history/${otherEmail}`);
+  return response.data;
+};
+
+export const sendChatMessage = async (
+  receiverEmail: string, 
+  text: string,
+  messageType: string = "text",
+  fileUrl?: string
+): Promise<ChatMessage> => {
+  const payload = {
+    receiver_email: receiverEmail,
+    text,
+    message_type: messageType,
+    file_url: fileUrl
+  };
+  const response = await apiClient.post<ChatMessage>('/chat/send', payload);
+  return response.data;
+};
+
+export const addChatContact = async (userId: string): Promise<ChatUser> => {
+  const response = await apiClient.post<ChatUser>('/chat/contacts/add', { user_id: userId });
+  return response.data;
+};
+
+export const deleteChatMessage = async (messageId: string): Promise<void> => {
+  await apiClient.delete(`/chat/message/${messageId}`);
+};
+

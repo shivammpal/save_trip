@@ -10,6 +10,7 @@ import { ProfilePage } from "./pages/ProfilePage";
 import { TravelPage } from "./pages/TravelPage";
 import { TripDetailsPage } from "./pages/TripDetailsPage";
 import { DocumentsPage } from "./pages/DocumentsPage";
+import { ChatPage } from "./pages/ChatPage";
 
 function App() {
   return (
@@ -31,6 +32,10 @@ function App() {
         <Route
           path="/profile"
           element={<ProtectedRoute><ProfilePage /></ProtectedRoute>}
+        />
+        <Route
+          path="/chat"
+          element={<ProtectedRoute><ChatPage /></ProtectedRoute>}
         />
         <Route
           path="/travel"

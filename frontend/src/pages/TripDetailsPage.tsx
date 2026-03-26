@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useParams, Link } from "react-router-dom";
-import { getTrip, getTripRecommendations, addItineraryItem, updateItineraryItem, deleteItineraryItem, searchDestinations, type Trip, type ItineraryItemCreate, type ItineraryItem, type RecommendationsResponse, type Destination } from "../services/apiService";
+import { getTrip, getTripRecommendations, addItineraryItem, updateItineraryItem, deleteItineraryItem, searchDestinations, type Trip, type ItineraryItem, type RecommendationsResponse, type Destination } from "../services/apiService";
 
 export const TripDetailsPage = () => {
   const { tripId } = useParams<{ tripId: string }>();
@@ -101,6 +101,25 @@ export const TripDetailsPage = () => {
     }
   };
 
+  const handleToggleVisited = async (item: ItineraryItem) => {
+    if (!tripId) return;
+    try {
+      const dataToSend = {
+        day: item.day,
+        description: item.description,
+        cost: item.cost,
+        location_name: item.location_name || "",
+        visited: !item.visited,
+      };
+      await updateItineraryItem(tripId, item.id, dataToSend);
+      // Refresh trip data
+      const updatedTrip = await getTrip(tripId);
+      setTrip(updatedTrip);
+    } catch (err) {
+      alert((err as Error).message);
+    }
+  };
+
   const resetForm = () => {
     setFormData({
       day: "",
@@ -152,6 +171,8 @@ export const TripDetailsPage = () => {
   if (error) return <div className="text-center p-10 text-red-400">Error: {error}</div>;
   if (!trip) return <div className="text-center p-10 text-gray-300">Trip not found.</div>;
 
+  const isCompletelyVisited = trip.itinerary && trip.itinerary.length > 0 && trip.itinerary.every(item => item.visited);
+
   return (
     <div className="container mx-auto p-6 max-w-4xl bg-gray-900 min-h-screen text-gray-100">
       {/* Trip Info Section */}
@@ -173,6 +194,11 @@ export const TripDetailsPage = () => {
             <p className="text-white font-semibold">
               <span className="font-medium text-gray-200">Budget:</span> <span className="text-green-400">${trip.budget.toLocaleString()}</span>
             </p>
+            {isCompletelyVisited && (
+              <span className="inline-block mt-2 bg-green-600 text-white text-xs font-bold px-3 py-1 rounded-full">
+                ✅ Completely Visited
+              </span>
+            )}
           </div>
           <Link
             to={`/trips/${trip.id}/documents`}
@@ -353,8 +379,8 @@ export const TripDetailsPage = () => {
                       {/* Activities for this day */}
                       <div className="mt-16 space-y-4">
                         {groupedItinerary[day]
-                          .sort((a, b) => (a.time || "").localeCompare(b.time || ""))
-                          .map((item, itemIndex) => (
+                          .sort((a: ItineraryItem, b: ItineraryItem) => (a.time || "").localeCompare(b.time || ""))
+                          .map((item: ItineraryItem, itemIndex: number) => (
                             <div key={item.id} className="relative w-full flex">
                               {itemIndex % 2 === 0 ? (
                                 <>
@@ -367,6 +393,12 @@ export const TripDetailsPage = () => {
                                           )}
                                         </div>
                                         <div className="flex gap-2">
+                                          <button
+                                            onClick={() => handleToggleVisited(item)}
+                                            className={`px-3 py-1 rounded text-sm text-white ${item.visited ? 'bg-green-600 hover:bg-green-500' : 'bg-gray-500 hover:bg-gray-400'}`}
+                                          >
+                                            {item.visited ? "Visited" : "Mark Visited"}
+                                          </button>
                                           <button
                                             onClick={() => startEdit(item)}
                                             className="bg-yellow-600 text-white px-3 py-1 rounded text-sm hover:bg-yellow-500"
@@ -413,6 +445,12 @@ export const TripDetailsPage = () => {
                                           )}
                                         </div>
                                         <div className="flex gap-2">
+                                          <button
+                                            onClick={() => handleToggleVisited(item)}
+                                            className={`px-3 py-1 rounded text-sm text-white ${item.visited ? 'bg-green-600 hover:bg-green-500' : 'bg-gray-500 hover:bg-gray-400'}`}
+                                          >
+                                            {item.visited ? "Visited" : "Mark Visited"}
+                                          </button>
                                           <button
                                             onClick={() => startEdit(item)}
                                             className="bg-yellow-600 text-white px-3 py-1 rounded text-sm hover:bg-yellow-500"

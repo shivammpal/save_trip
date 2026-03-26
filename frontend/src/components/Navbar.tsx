@@ -23,6 +23,9 @@ export const Navbar = () => {
               <Link to="/profile" className="font-medium hover:text-blue-600">
                 Profile
               </Link>
+              <Link to="/chat" className="font-medium hover:text-blue-600">
+                Messages
+              </Link>
               <button
                 onClick={logout}
                 className="bg-red-500 text-white hover:bg-red-600 px-4 py-2 rounded-md font-semibold transition-colors"

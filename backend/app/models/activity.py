@@ -13,6 +13,7 @@ class ItineraryItemCreate(BaseModel):
     description: str = Field(..., min_length=1)
     cost: float = Field(default=0.0, ge=0)
     location_name: Optional[str] = None
+    visited: bool = Field(default=False)
     
 class ItineraryItem(ItineraryItemCreate):
     id: UUID = Field(default_factory=uuid4)
