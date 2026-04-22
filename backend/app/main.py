@@ -18,12 +18,37 @@ from app.routers.websockets import router as websockets_router
 from app.routers.documents import router as documents_router
 from app.routers.chat import router as chat_router
 
+import firebase_admin
+from firebase_admin import credentials
+
+# Initialize Firebase Admin
+cred = credentials.Certificate(settings.FIREBASE_CREDENTIALS_PATH)
+firebase_admin.initialize_app(cred)
+
 # Create an instance of the FastAPI application
 app = FastAPI(
     title="BudgetTripPlanner API",
     description="API for planning budget-friendly trips.",
     version="0.1.0"
 )
+
+# Custom Security Headers Middleware
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request
+
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["X-XSS-Protection"] = "1; mode=block"
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+        # Permissive CSP for development but enforces basic structure
+        response.headers["Content-Security-Policy"] = "default-src 'self' *; img-src * data:; script-src * 'unsafe-inline' 'unsafe-eval'; style-src * 'unsafe-inline';"
+        response.headers["Permissions-Policy"] = "geolocation=(self), microphone=(), camera=()"
+        return response
+
+app.add_middleware(SecurityHeadersMiddleware)
 
 # Add session middleware for OAuth
 app.add_middleware(SessionMiddleware, secret_key=settings.SECRET_KEY)

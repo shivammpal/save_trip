@@ -7,7 +7,8 @@ from fastapi.responses import RedirectResponse
 from app.models.user import UserCreate, Token, UserInDB
 from app.core.database import users_collection
 from app.core.security import get_password_hash, verify_password, create_access_token
-from app.core.oauth import oauth # <-- NEW IMPORT
+from pydantic import BaseModel
+import firebase_admin.auth as firebase_auth
 
 # Initialize the router
 router = APIRouter(
@@ -49,47 +50,49 @@ async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(
     access_token = create_access_token(subject=user["email"])
     return {"access_token": access_token, "token_type": "bearer"}
 
-# --- Google OAuth2 Authentication ---
+# --- Firebase Google Authentication ---
 
-@router.get('/login/google')
-async def login_google(request: Request):
-    """
-    Redirects the user to Google's authentication page.
-    """
-    redirect_uri = request.url_for('auth_google_callback')
-    return await oauth.google.authorize_redirect(request, redirect_uri)
+class FirebaseTokenRequest(BaseModel):
+    token: str
 
-
-@router.get('/google/callback', name='auth_google_callback')
-async def auth_google_callback(request: Request):
+@router.post("/google", response_model=Token)
+async def login_with_firebase_google(request: FirebaseTokenRequest):
     """
-    Handles the callback from Google. Instead of returning JSON, this now
-    redirects the user back to the frontend with the token.
+    Verifies a Firebase ID token sent from the frontend and returns our custom access token.
     """
     try:
-        token = await oauth.google.authorize_access_token(request)
+        # Verify the Firebase ID token with a 60-second clock skew tolerance
+        # (Resolves "Token used too early" local development clock desync errors)
+        decoded_token = firebase_auth.verify_id_token(request.token, clock_skew_seconds=60)
     except Exception as e:
-        raise HTTPException(status_code=401, detail=f"Could not validate credentials: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f"Invalid Firebase token: {str(e)}",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
 
-    user_info = token.get('userinfo')
-    if not user_info:
-        raise HTTPException(status_code=400, detail="Could not fetch user info")
-
-    user_email = user_info['email']
+    user_email = decoded_token.get("email")
+    if not user_email:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Firebase token did not contain an email.",
+        )
+        
+    # Check if user exists in our DB
     user = await users_collection.find_one({"email": user_email})
 
     if not user:
+        # User doesn't exist, create them. Extract name and picture if available.
         new_user = UserInDB(
             email=user_email,
             provider="google",
-            social_id=user_info.get('sub')
+            social_id=decoded_token.get("uid"),
+            name=decoded_token.get("name"),
+            profile_picture=decoded_token.get("picture")
         )
         await users_collection.insert_one(new_user.model_dump())
     
-    # Create our own application's access token
+    # Generate our standard JWT for the frontend to use
     access_token = create_access_token(subject=user_email)
     
-    # Redirect the user to a new frontend route with the token
-    # The frontend will be responsible for handling this token.
-    frontend_url = f"http://localhost:5173/auth/callback?token={access_token}"
-    return RedirectResponse(url=frontend_url)
+    return {"access_token": access_token, "token_type": "bearer"}

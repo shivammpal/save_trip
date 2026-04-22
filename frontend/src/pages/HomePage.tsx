@@ -8,11 +8,25 @@ const images = [
   "https://images.pexels.com/photos/3932687/pexels-photo-3932687.jpeg",
 ];
 
+const testimonials = [
+  { name: "Rahul S.", role: "Solo Adventurer", quote: "Pocket Yatra completely changed how I travel. The AI suggested offbeat places I didn't even know existed!", rating: 5, avatar: "https://i.pravatar.cc/150?u=rahul" },
+  { name: "Priya & Aman", role: "Couples Backpackers", quote: "Managing our budget used to be a headache. The smart tracking kept our Bali trip well within limits.", rating: 5, avatar: "https://i.pravatar.cc/150?u=priya" },
+  { name: "Sarah W.", role: "Group Coordinator", quote: "Inviting friends and collaboratively building the itinerary saved us countless messy group chats.", rating: 4, avatar: "https://i.pravatar.cc/150?u=sarah" }
+];
+
+const faqs = [
+  { q: "Is Pocket Yatra free to use?", a: "Yes! Our core planning and AI recommendation features are completely free for all users." },
+  { q: "How accurate is the AI budget estimator?", a: "Our AI engine uses real-time local data to estimate costs accurately, but we always advise keeping a small buffer for unexpected expenses." },
+  { q: "Can I collaborate with my friends?", a: "Absolutely. You can select Group Trip, invite friends, and share the planning responsibilities." },
+  { q: "Are my documents secure?", a: "We use enterprise-grade cloud storage. Your travel documents and IDs are securely processed and verified." }
+];
+
 export const HomePage = () => {
   const [title, setTitle] = useState("");
   const [subtitle, setSubtitle] = useState("");
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [fade, setFade] = useState(true);
+  const [openFaqIndex, setOpenFaqIndex] = useState<number | null>(null);
 
   // Typing animation
   useEffect(() => {
@@ -169,8 +183,76 @@ export const HomePage = () => {
         </div>
       </section>
 
-      {/* 4. CTA SECTION */}
-      <section className="relative z-20 w-full py-32 px-6 lg:px-20 overflow-hidden">
+      {/* 4. TESTIMONIALS SECTION */}
+      <section className="relative w-full py-24 px-6 lg:px-20 bg-gray-900 border-b border-gray-800">
+        <div className="max-w-7xl mx-auto">
+          <div className="text-center mb-16">
+            <h2 className="text-4xl md:text-5xl font-bold text-white mb-4 shadow-sm">
+              Loved by Travelers
+            </h2>
+            <p className="text-lg text-gray-400">Join thousands who have simplified their adventures.</p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            {testimonials.map((t, idx) => (
+              <div key={idx} className="bg-gray-800/60 p-8 rounded-2xl border border-gray-700/50 hover:bg-gray-800 transition-colors duration-300 shadow-xl relative overflow-hidden group">
+                {/* Quotation mark decoration */}
+                <div className="absolute top-4 right-4 text-7xl text-blue-500/10 font-serif leading-none select-none group-hover:scale-110 group-hover:text-blue-500/20 transition-all">"</div>
+                <div className="flex items-center gap-4 mb-6 relative z-10">
+                  <img src={t.avatar} alt={t.name} className="w-14 h-14 rounded-full border-2 border-blue-500 shadow-lg object-cover" />
+                  <div>
+                    <h4 className="text-lg font-bold text-white leading-tight">{t.name}</h4>
+                    <span className="text-sm text-blue-400 font-medium">{t.role}</span>
+                  </div>
+                </div>
+                <div className="flex mb-4 relative z-10">
+                  {[...Array(5)].map((_, i) => (
+                    <span key={i} className={`text-xl ${i < t.rating ? 'text-yellow-400' : 'text-gray-600'}`}>★</span>
+                  ))}
+                </div>
+                <p className="text-gray-300 italic relative z-10 leading-relaxed">"{t.quote}"</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* 5. FAQ SECTION */}
+      <section className="relative w-full py-24 px-6 lg:px-20 bg-gray-950">
+        <div className="max-w-3xl mx-auto">
+          <div className="text-center mb-16">
+            <h2 className="text-4xl md:text-5xl font-bold text-white mb-4">
+              Frequently Asked Questions
+            </h2>
+            <p className="text-lg text-gray-400">Everything you need to know about Pocket Yatra.</p>
+          </div>
+
+          <div className="space-y-4">
+            {faqs.map((faq, idx) => (
+              <div 
+                key={idx} 
+                className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden shadow-md cursor-pointer transition-all duration-300"
+                onClick={() => setOpenFaqIndex(openFaqIndex === idx ? null : idx)}
+              >
+                <div className="flex items-center justify-between p-6">
+                  <h4 className="text-lg font-semibold text-gray-200">{faq.q}</h4>
+                  <span className={`text-blue-500 text-xl font-bold transition-transform duration-300 ${openFaqIndex === idx ? 'rotate-45' : ''}`}>
+                    +
+                  </span>
+                </div>
+                <div 
+                  className={`px-6 overflow-hidden transition-all duration-300 ease-in-out ${openFaqIndex === idx ? 'max-h-48 pb-6 opacity-100' : 'max-h-0 opacity-0'}`}
+                >
+                  <p className="text-gray-400 leading-relaxed border-t border-gray-800 pt-4 mt-2">{faq.a}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* 6. CTA SECTION */}
+      <section className="relative z-20 w-full py-32 px-6 lg:px-20 overflow-hidden bg-gray-900">
         {/* Animated Background Gradients */}
         <div className="absolute inset-0 bg-gradient-to-br from-indigo-900 via-gray-900 to-blue-900 z-0"></div>
         <div className="absolute -top-[50%] -left-[50%] w-[200%] h-[200%] bg-gradient-to-tr from-transparent via-blue-600/10 to-transparent animate-[spin_15s_linear_infinite] z-0 pointer-events-none blur-3xl"></div>

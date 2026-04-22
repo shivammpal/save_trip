@@ -100,3 +100,52 @@ async def delete_document_from_trip(
         
     return None
 
+import asyncio
+
+@router.post("/trips/{trip_id}/{public_id}/verify/ai", status_code=status.HTTP_200_OK)
+async def verify_document_ai(
+    trip_id: str,
+    public_id: str,
+    current_user: UserInDB = Depends(get_current_user)
+):
+    try:
+        object_id = ObjectId(trip_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid format")
+        
+    # Mocking a 2 second LLM verification delay
+    await asyncio.sleep(2)
+    
+    result = await trips_collection.update_one(
+        {"_id": object_id, "documents.public_id": public_id},
+        {"$set": {"documents.$.verification_status": "ai_verified"}}
+    )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Document not found")
+        
+    return {"message": "Document verified by AI successfully."}
+
+@router.post("/trips/{trip_id}/{public_id}/verify/leader", status_code=status.HTTP_200_OK)
+async def verify_document_leader(
+    trip_id: str,
+    public_id: str,
+    current_user: UserInDB = Depends(get_current_user)
+):
+    try:
+        object_id = ObjectId(trip_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid format")
+    
+    trip = await trips_collection.find_one({"_id": object_id})
+    if not trip or trip.get("owner_email") != current_user.email:
+        raise HTTPException(status_code=403, detail="Only the trip leader can verify documents manually.")
+        
+    result = await trips_collection.update_one(
+        {"_id": object_id, "documents.public_id": public_id},
+        {"$set": {"documents.$.verification_status": "leader_verified"}}
+    )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Document not found")
+        
+    return {"message": "Document verified by Leader successfully."}
+

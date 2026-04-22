@@ -14,6 +14,7 @@ class ItineraryItemCreate(BaseModel):
     cost: float = Field(default=0.0, ge=0)
     location_name: Optional[str] = None
     visited: bool = Field(default=False)
+    transport_mode: Optional[str] = None
     
 class ItineraryItem(ItineraryItemCreate):
     id: UUID = Field(default_factory=uuid4)
@@ -27,6 +28,8 @@ class ExpenseCreate(BaseModel):
     amount: float = Field(..., gt=0)
     category: str = Field(..., min_length=1)
     date: date
+    paid_by: Optional[str] = None
+    split_with: list[str] = []
 
 class Expense(ExpenseCreate):
     id: UUID = Field(default_factory=uuid4)

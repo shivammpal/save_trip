@@ -27,6 +27,8 @@ async def get_chat_users(current_user: UserInDB = Depends(get_current_user)):
     users_cursor = users_collection.find({"email": {"$in": contacts}})
     users = await users_cursor.to_list(length=100)
     
+    blocked_by_me = getattr(current_user, "blocked_contacts", [])
+
     result = []
     for u in users:
         email = u.get("email")
@@ -34,8 +36,52 @@ async def get_chat_users(current_user: UserInDB = Depends(get_current_user)):
         name = u.get("name")
         if not name:
             name = email.split("@")[0]
-        result.append(ChatUser(name=name, email=email))
+            
+        is_online = connection_manager.is_user_online(email)
+        is_blocked = email in blocked_by_me
         
+        # If the other person blocked the current user, they should always appear offline to protect privacy.
+        their_blocks = u.get("blocked_contacts", [])
+        if current_user.email in their_blocks:
+            is_online = False
+            
+        location = u.get("location")
+        status = u.get("bio")
+        profile_picture = u.get("profile_picture")
+        
+        last_msg_query = {
+            "$or": [
+                {"sender_email": current_user.email, "receiver_email": email},
+                {"sender_email": email, "receiver_email": current_user.email}
+            ]
+        }
+        last_msg_cursor = messages_collection.find(last_msg_query).sort("timestamp", -1).limit(1)
+        last_msgs = await last_msg_cursor.to_list(length=1)
+        
+        last_message_preview = None
+        last_message_time = None
+        
+        if last_msgs:
+            msg = last_msgs[0]
+            last_message_time = msg.get("timestamp")
+            if msg.get("message_type") == "image":
+                last_message_preview = "📸 Image"
+            elif msg.get("message_type") == "audio":
+                last_message_preview = "🎤 Voice message"
+            else:
+                text = msg.get("text", "")
+                last_message_preview = text[:27] + "..." if len(text) > 30 else text
+        else:
+            last_message_preview = "Start a conversation"
+            
+        result.append(ChatUser(
+            name=name, email=email, is_online=is_online, is_blocked=is_blocked,
+            location=location, status=status, profile_picture=profile_picture,
+            last_message_preview=last_message_preview, last_message_time=last_message_time
+        ))
+        
+    # Sort result: users with messages first (most recent), then users without messages
+    result.sort(key=lambda x: x.last_message_time or datetime.min, reverse=True)
     return result
 
 class AddContactRequest(BaseModel):
@@ -68,7 +114,40 @@ async def add_chat_contact(payload: AddContactRequest, current_user: UserInDB = 
     
     name = target_user.get("name")
     if not name: name = target_email.split("@")[0]
-    return ChatUser(name=name, email=target_email)
+    
+    is_online = connection_manager.is_user_online(target_email)
+    
+    return ChatUser(
+        name=name, 
+        email=target_email, 
+        is_online=is_online, 
+        is_blocked=False,
+        location=target_user.get("location"),
+        status=target_user.get("bio"),
+        profile_picture=target_user.get("profile_picture"),
+        last_message_preview="Start a conversation"
+    )
+
+@router.post("/block/{email}", status_code=status.HTTP_200_OK)
+async def block_user(email: str, current_user: UserInDB = Depends(get_current_user)):
+    """Blocks a user, preventing them from sending messages to you."""
+    if email == current_user.email:
+        raise HTTPException(status_code=400, detail="Cannot block yourself.")
+    
+    await users_collection.update_one(
+        {"email": current_user.email},
+        {"$addToSet": {"blocked_contacts": email}}
+    )
+    return {"status": "User blocked successfully."}
+
+@router.post("/unblock/{email}", status_code=status.HTTP_200_OK)
+async def unblock_user(email: str, current_user: UserInDB = Depends(get_current_user)):
+    """Unblocks a previously blocked user."""
+    await users_collection.update_one(
+        {"email": current_user.email},
+        {"$pull": {"blocked_contacts": email}}
+    )
+    return {"status": "User unblocked successfully."}
 
 @router.get("/history/{other_email}", response_model=List[MessageInDB])
 async def get_chat_history(other_email: str, current_user: UserInDB = Depends(get_current_user)):
@@ -95,6 +174,16 @@ async def send_message(msg: MessageCreate, current_user: UserInDB = Depends(get_
     receiver = await users_collection.find_one({"email": msg.receiver_email})
     if not receiver:
         raise HTTPException(status_code=404, detail="Receiver not found")
+
+    # Blocking Rules Implementation
+    # 1. Did current_user block the receiver?
+    if msg.receiver_email in getattr(current_user, "blocked_contacts", []):
+         raise HTTPException(status_code=403, detail="You cannot message a blocked contact.")
+         
+    # 2. Did receiver block the current_user?
+    if current_user.email in receiver.get("blocked_contacts", []):
+         # Fail silently? Or Explicitly? "User is unavailable" to not reveal block.
+         raise HTTPException(status_code=403, detail="Message could not be delivered.")
 
     new_msg = {
         "text": msg.text,

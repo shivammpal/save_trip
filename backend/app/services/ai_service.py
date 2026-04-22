@@ -15,14 +15,7 @@ async def get_recommendations_for_trip(trip: TripInDB) -> dict:
     Generates travel recommendations for a given trip using the Gemini API.
     Validates budget and ensures AI output is clean JSON.
     """
-    # Basic budget check: assume $50 per day minimum
     trip_duration = (trip.end_date - trip.start_date).days + 1
-    min_budget_required = trip_duration * 50
-
-    if trip.budget < min_budget_required:
-        return {
-            "message": f"Budget too low to plan this trip. Minimum required: ${min_budget_required} for {trip_duration} days, but you have ${trip.budget}."
-        }
 
     model = genai.GenerativeModel("gemini-2.5-flash")
 
@@ -30,6 +23,7 @@ async def get_recommendations_for_trip(trip: TripInDB) -> dict:
     prompt = f"""
     You are an expert travel planner. Based on the trip details below, suggest 3–5
     unique and budget-friendly activities that fit within the total budget.
+    Considering the trip starts in {trip.start_date.strftime('%B')}, strongly factor in season-appropriate suggestions and weather for this time of the year.
 
     Trip Details:
     - Destination: {trip.destination}
@@ -94,13 +88,6 @@ async def generate_itinerary_for_trip(trip: TripInDB) -> list:
     Returns a list of itinerary items structured for the database.
     """
     trip_duration = (trip.end_date - trip.start_date).days + 1
-
-    # Basic budget check: assume $50 per day minimum
-    min_budget_required = trip_duration * 50
-
-    if trip.budget < min_budget_required:
-        # If budget is too low, return a minimal itinerary or empty list
-        return []
 
     model = genai.GenerativeModel("gemini-2.5-flash")
 

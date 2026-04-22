@@ -39,6 +39,9 @@ class UserInDB(BaseModel):
     # NEW: Chat Privacy Fields
     user_id: Optional[str] = None
     contacts: List[str] = []
+    blocked_contacts: List[str] = []
+    # NEW: Travel History
+    visited_locations: List[str] = []
 
 class UpdateUserProfile(BaseModel):
     name: Optional[str] = None
@@ -50,6 +53,7 @@ class UpdateUserProfile(BaseModel):
     location: Optional[str] = None
     twitter_url: Optional[str] = None
     instagram_url: Optional[str] = None
+    visited_locations: Optional[List[str]] = None
 
 class UserProfile(BaseModel):
     email: EmailStr
@@ -70,6 +74,28 @@ class UserProfile(BaseModel):
     # NEW: Chat Privacy Fields
     user_id: Optional[str] = None
     contacts: List[str] = []
+    blocked_contacts: List[str] = []
+    # NEW: Travel History
+    visited_locations: List[str] = []
+
+    class Config:
+        from_attributes = True
+
+class PublicProfile(BaseModel):
+    email: EmailStr
+    name: Optional[str] = None
+    age: Optional[int] = None
+    travel_preferences: Optional[List[str]] = None
+    points: int = 0
+    badges: List[str] = []
+    bio: Optional[str] = None
+    profile_picture: Optional[str] = None
+    banner_picture: Optional[str] = None
+    location: Optional[str] = None
+    twitter_url: Optional[str] = None
+    instagram_url: Optional[str] = None
+    user_id: Optional[str] = None
+    visited_locations: List[str] = []
 
     class Config:
         from_attributes = True

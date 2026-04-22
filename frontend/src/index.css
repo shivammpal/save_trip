@@ -33,3 +33,12 @@ body {
   white-space: nowrap;
   animation: typing 3s steps(25, end) 4s forwards, blink-caret 1s step-end infinite 7s;
 }
+
+/* Hide scrollbars for sliders */
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-hide {
+  -ms-overflow-style: none; /* IE and Edge */
+  scrollbar-width: none; /* Firefox */
+}

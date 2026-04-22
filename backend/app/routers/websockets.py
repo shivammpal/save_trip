@@ -28,16 +28,37 @@ async def websocket_endpoint(websocket: WebSocket, trip_id: str):
         connection_manager.disconnect(websocket, trip_id)
         print(f"Client disconnected from trip {trip_id}")
 
+from app.core.database import users_collection
+import json
+
 @router.websocket("/chat/{email}")
 async def chat_websocket_endpoint(websocket: WebSocket, email: str):
     """
     Handles global WebSocket connections for 1-on-1 chat.
+    Broadcasts online presence status to contacts.
     """
     await connection_manager.connect_personal(websocket, email)
+    
+    # Broadcast Online Status
     try:
+        user = await users_collection.find_one({"email": email})
+        if user and user.get("contacts"):
+            status_msg = json.dumps({"type": "status_update", "email": email, "is_online": True})
+            for contact in user.get("contacts", []):
+                await connection_manager.send_personal_message(status_msg, contact)
+                
         while True:
             # Keep line alive
             await websocket.receive_text()
     except WebSocketDisconnect:
         connection_manager.disconnect_personal(websocket, email)
         print(f"User {email} disconnected from global chat")
+        # Broadcast Offline Status
+        user = await users_collection.find_one({"email": email})
+        if user and user.get("contacts"):
+            # Ensure the user has zero active connections everywhere before declaring offline.
+            # A user might have multiple tabs open.
+            if not connection_manager.is_user_online(email):
+                status_msg = json.dumps({"type": "status_update", "email": email, "is_online": False})
+                for contact in user.get("contacts", []):
+                    await connection_manager.send_personal_message(status_msg, contact)

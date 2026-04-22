@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 
 from app.core.dependencies import get_current_user
-from app.models.user import UserInDB, UserProfile, UpdateUserProfile
+from app.models.user import UserInDB, UserProfile, UpdateUserProfile, PublicProfile
 from app.core.database import users_collection
 
 # Initialize the router
@@ -76,3 +76,11 @@ async def claim_user_id(
     
     updated_user = await users_collection.find_one({"email": current_user.email})
     return updated_user
+
+@router.get("/public/{email}", response_model=PublicProfile)
+async def get_public_profile(email: str, current_user: UserInDB = Depends(get_current_user)):
+    """Fetch the public profile of another user."""
+    user = await users_collection.find_one({"email": email})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    return user

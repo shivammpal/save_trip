@@ -4,7 +4,10 @@ import { useState, useEffect } from "react";
 import { Input } from "../components/ui/Input";
 import { Button } from "../components/ui/Button";
 import { useNavigate, Link } from "react-router-dom";
-import { registerUser } from "../services/apiService";
+import { registerUser, loginWithFirebaseGoogle } from "../services/apiService";
+import { useAuth } from "../context/AuthContext";
+import { signInWithPopup } from "firebase/auth";
+import { auth, googleProvider } from "../firebase";
 
 // CHANGED: Made icon color lighter for the dark theme
 const MailIcon = (
@@ -62,6 +65,25 @@ export const RegisterPage = () => {
     }
   };
 
+  const { login } = useAuth();
+  
+  const handleGoogleLogin = async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const result = await signInWithPopup(auth, googleProvider);
+      const idToken = await result.user.getIdToken();
+      const data = await loginWithFirebaseGoogle(idToken);
+      login(data.access_token);
+      navigate("/dashboard");
+    } catch (err) {
+      console.error(err);
+      setError((err as Error).message || "Google signup failed.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-slate-900 flex">
       {/* Left side: stacked images with front image changing */}
@@ -105,9 +127,10 @@ export const RegisterPage = () => {
             Create Your Account
           </h1>
 
-          <a
-            href="http://127.0.0.1:8000/auth/login/google"
-            className="w-full flex items-center justify-center py-3 px-4 border border-gray-300 rounded-lg shadow-sm bg-white text-sm font-medium text-gray-800 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition"
+          <button
+            onClick={handleGoogleLogin}
+            disabled={isLoading}
+            className="w-full flex items-center justify-center py-3 px-4 border border-gray-300 rounded-lg shadow-sm bg-white text-sm font-medium text-gray-800 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition disabled:opacity-50"
           >
             <svg className="w-5 h-5 mr-3" viewBox="0 0 48 48" aria-hidden="true" focusable="false">
               <path fill="#FFC107" d="M43.611 20.083H42V20H24v8h11.303c-1.649 4.657-6.08 8-11.303 8c-6.627 0-12-5.373-12-12s5.373-12 12-12c3.059 0 5.842 1.154 7.961 3.039L38.804 9.196C34.807 5.757 29.824 4 24 4C12.955 4 4 12.955 4 24s8.955 20 20 20s20-8.955 20-20c0-1.341-.138-2.65-.389-3.917z" />
@@ -116,7 +139,7 @@ export const RegisterPage = () => {
               <path fill="#1976D2" d="M43.611 20.083H42V20H24v8h11.303c-.792 2.237-2.231 4.166-4.087 5.571l6.19 5.238C42.021 35.841 44 30.338 44 24c0-1.341-.138-2.65-.389-3.917z" />
             </svg>
             Sign up with Google
-          </a>
+          </button>
 
           <div className="relative flex py-2 items-center">
             <div className="flex-grow border-t border-slate-600"></div>

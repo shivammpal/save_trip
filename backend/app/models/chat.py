@@ -19,3 +19,11 @@ class MessageInDB(MessageCreate):
 class ChatUser(BaseModel):
     name: str
     email: str
+    is_online: bool = False
+    is_blocked: bool = False
+    location: Optional[str] = None
+    status: Optional[str] = None
+    profile_picture: Optional[str] = None
+    last_message_preview: Optional[str] = None
+    last_message_time: Optional[datetime] = None
+    unread_count: int = 0

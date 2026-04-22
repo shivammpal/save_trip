@@ -3,8 +3,8 @@
 import { useState, useEffect, type ChangeEvent, type FormEvent } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import axios from 'axios';
-import { getTrip, getUploadSignature, addDocumentToTrip, deleteDocument } from '../services/apiService';
-import type { Trip, Document } from '../services/apiService';
+import { getTrip, getUploadSignature, addDocumentToTrip, deleteDocument, verifyDocumentAI, verifyDocumentLeader } from '../services/apiService';
+import type { Trip } from '../services/apiService';
 import { Modal } from '../components/ui/Modal';
 import { Input } from '../components/ui/Input';
 import { Button } from '../components/ui/Button';
@@ -25,6 +25,7 @@ export const DocumentsPage = () => {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const [documentName, setDocumentName] = useState('');
+    const [verifyingDocId, setVerifyingDocId] = useState<string | null>(null);
 
     const fetchTrip = async () => {
         if (!tripId) return;
@@ -116,6 +117,42 @@ export const DocumentsPage = () => {
         }
     };
 
+    const handleAIVerify = async (publicId: string) => {
+        if (!tripId) return;
+        setVerifyingDocId(publicId);
+        try {
+            await verifyDocumentAI(tripId, publicId);
+            await fetchTrip();
+        } catch (err) {
+            alert((err as Error).message);
+        } finally {
+            setVerifyingDocId(null);
+        }
+    };
+
+    const handleLeaderVerify = async (publicId: string) => {
+        if (!tripId) return;
+        setVerifyingDocId(publicId);
+        try {
+            await verifyDocumentLeader(tripId, publicId);
+            await fetchTrip();
+        } catch (err) {
+            alert((err as Error).message);
+        } finally {
+            setVerifyingDocId(null);
+        }
+    };
+
+    const renderVerificationBadge = (status?: string) => {
+        if (status === 'leader_verified') {
+            return <span className="bg-green-600/20 text-green-400 border border-green-500/50 px-2 py-0.5 rounded text-xs font-semibold ml-2">✅ Leader Verified</span>;
+        }
+        if (status === 'ai_verified') {
+            return <span className="bg-blue-600/20 text-blue-400 border border-blue-500/50 px-2 py-0.5 rounded text-xs font-semibold ml-2">🤖 AI Verified</span>;
+        }
+        return <span className="bg-yellow-600/20 text-yellow-400 border border-yellow-500/50 px-2 py-0.5 rounded text-xs font-semibold ml-2">⏳ Pending</span>;
+    };
+
     if (isLoading) return <div className="text-center p-10">Loading documents...</div>;
     if (error) return <div className="text-center p-10 text-red-500">Error: {error}</div>;
 
@@ -150,21 +187,45 @@ export const DocumentsPage = () => {
                                     <FileIcon type={doc.resource_type} />
                                 </div>
                                 <div className="flex-1 min-w-0">
-                                    <a href={doc.secure_url} target="_blank" rel="noopener noreferrer" className="font-semibold text-white hover:text-blue-400 break-all block transition-colors duration-200">
-                                        {doc.original_filename}
-                                    </a>
+                                    <div className="flex items-center">
+                                      <a href={doc.secure_url} target="_blank" rel="noopener noreferrer" className="font-semibold text-white hover:text-blue-400 break-all transition-colors duration-200">
+                                          {doc.original_filename}
+                                      </a>
+                                      {renderVerificationBadge(doc.verification_status)}
+                                    </div>
                                     <p className="text-sm text-gray-400 mt-1">Uploaded: {new Date(doc.created_at).toLocaleDateString()}</p>
                                 </div>
                             </div>
-                            <button
-                                onClick={() => handleDelete(doc.public_id)}
-                                className="text-red-400 hover:text-red-300 p-2 rounded-lg hover:bg-gray-700 transition-all duration-200"
-                                title="Delete document"
-                            >
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                </svg>
-                            </button>
+                            <div className="flex items-center gap-2">
+                                {doc.verification_status !== 'leader_verified' && doc.verification_status !== 'ai_verified' && (
+                                    <button
+                                        onClick={() => handleAIVerify(doc.public_id)}
+                                        disabled={verifyingDocId === doc.public_id}
+                                        className="text-xs bg-blue-600/80 hover:bg-blue-600 text-white px-2 py-1 rounded transition-colors disabled:opacity-50"
+                                    >
+                                        {verifyingDocId === doc.public_id ? '...' : 'AI Verify'}
+                                    </button>
+                                )}
+                                {doc.verification_status === 'ai_verified' && (
+                                    <button
+                                        onClick={() => handleLeaderVerify(doc.public_id)}
+                                        disabled={verifyingDocId === doc.public_id}
+                                        className="text-xs bg-green-600/80 hover:bg-green-600 text-white px-2 py-1 rounded transition-colors disabled:opacity-50"
+                                        title="Only Trip Leader can verify manually"
+                                    >
+                                        {verifyingDocId === doc.public_id ? '...' : 'Leader Verify'}
+                                    </button>
+                                )}
+                                <button
+                                    onClick={() => handleDelete(doc.public_id)}
+                                    className="text-red-400 hover:text-red-300 p-2 rounded-lg hover:bg-gray-700 transition-all duration-200"
+                                    title="Delete document"
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                    </svg>
+                                </button>
+                            </div>
                         </div>
                     ))}
                 </div>

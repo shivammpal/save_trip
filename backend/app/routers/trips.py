@@ -3,7 +3,7 @@ from pydantic import BaseModel
 from datetime import date, datetime
 from bson import ObjectId
 from app.models.user import UserInDB
-from app.models.trip import TripCreate, TripResponse, TripInDB, TripBase, InviteRequest
+from app.models.trip import TripCreate, TripResponse, TripInDB, TripBase, InviteRequest, TripUpdate
 from app.core.dependencies import get_current_user
 from app.core.database import trips_collection, users_collection
 from typing import List
@@ -11,6 +11,9 @@ from app.services import geo_service
 from app.models.common import Coordinates
 from app.services.hotel_service import search_for_hotels, HotelOffer
 from app.services.ai_service import generate_itinerary_for_trip, get_recommendations_for_trip
+from app.services.flight_service import search_flights
+from app.services.train_service import search_trains
+
 class ItineraryPin(BaseModel):
     name: str
     coords: Coordinates
@@ -44,7 +47,7 @@ async def create_trip(
 
     await users_collection.update_one(
         {"email": current_user.email},
-        {"$inc": {"points": 50}, "$addToSet": {"badges": "First Trip Planner"}}
+        {"$addToSet": {"badges": "First Trip Planner"}}
     )
 
     coords = await geo_service.get_coords_for_location(trip.destination)
@@ -81,6 +84,29 @@ async def create_trip(
     except Exception as e:
         print(f"Failed to generate initial recommendations: {e}")
 
+    # Fetch transport details if requested
+    if trip.transport_mode == "flight" and trip.source and trip.start_date:
+        try:
+            flights = await search_flights(trip.source, trip.destination, trip.start_date.strftime("%Y-%m-%d"))
+            flights_data = [f.model_dump() for f in flights[:5]]
+            await trips_collection.update_one(
+                {"_id": new_trip_id},
+                {"$set": {"transport_details": flights_data}}
+            )
+        except Exception as e:
+            print(f"Failed to fetch flights: {e}")
+            
+    elif trip.transport_mode == "train" and trip.source and trip.start_date:
+        try:
+            trains = await search_trains(origin=trip.source, destination=trip.destination, departure_date=trip.start_date.strftime("%Y-%m-%d"))
+            trains_data = [t.model_dump() for t in trains[:5]]
+            await trips_collection.update_one(
+                {"_id": new_trip_id},
+                {"$set": {"transport_details": trains_data}}
+            )
+        except Exception as e:
+            print(f"Failed to fetch trains: {e}")
+
     final_trip = await trips_collection.find_one({"_id": new_trip_id})
 
     # --- UPDATED ---
@@ -95,6 +121,15 @@ async def get_user_trips(current_user: UserInDB = Depends(get_current_user)):
     # This was already correct, no changes needed here.
     return [TripResponse.model_validate(trip) for trip in trips]
 
+@router.get("/feed", response_model=List[TripResponse])
+async def get_wander_feed(current_user: UserInDB = Depends(get_current_user)):
+    """Fetches public trips for the WanderFeed"""
+    trips_cursor = trips_collection.find({"is_public": True}).sort("start_date", -1).limit(50)
+    trips = await trips_cursor.to_list(length=50)
+
+    # Validate and return
+    return [TripResponse.model_validate(trip) for trip in trips]
+
 @router.get("/{trip_id}", response_model=TripResponse)
 async def get_trip(
     trip_id: str,
@@ -107,8 +142,11 @@ async def get_trip(
 
     trip = await trips_collection.find_one({"_id": object_id})
 
-    if trip is None or trip.get("owner_email") != current_user.email:
+    if trip is None:
         raise HTTPException(status_code=404, detail="Trip not found")
+
+    if trip.get("owner_email") != current_user.email and not trip.get("is_public", False):
+        raise HTTPException(status_code=403, detail="Access denied. Trip is not public.")
 
     # --- LAZY MIGRATION FOR MISSING IDs ---
     needs_update = False
@@ -131,7 +169,7 @@ async def get_trip(
 @router.put("/{trip_id}", response_model=TripResponse)
 async def update_trip(
     trip_id: str,
-    trip_update: TripBase,
+    trip_update: TripUpdate,
     current_user: UserInDB = Depends(get_current_user)
 ):
     try:
@@ -151,13 +189,23 @@ async def update_trip(
     if "end_date" in update_data and update_data["end_date"]:
         update_data["end_date"] = datetime.combine(update_data["end_date"], datetime.min.time())
 
-    start = update_data.get('start_date', existing_trip.get('start_date'))
-    end = update_data.get('end_date', existing_trip.get('end_date'))
-    if start and end:
-        start_date_obj = date.fromisoformat(str(start).split('T')[0])
-        end_date_obj = date.fromisoformat(str(end).split('T')[0])
-        if start_date_obj > end_date_obj:
-            raise HTTPException(status_code=400, detail="End date must be after start date")
+    if "start_date" in update_data or "end_date" in update_data:
+        start = update_data.get('start_date', existing_trip.get('start_date'))
+        end = update_data.get('end_date', existing_trip.get('end_date'))
+        if start and end:
+            try:
+                start_date_obj = start.date() if isinstance(start, datetime) else start
+                if isinstance(start_date_obj, str):
+                    start_date_obj = date.fromisoformat(start_date_obj[:10])
+                
+                end_date_obj = end.date() if isinstance(end, datetime) else end
+                if isinstance(end_date_obj, str):
+                    end_date_obj = date.fromisoformat(end_date_obj[:10])
+
+                if start_date_obj > end_date_obj:
+                    raise HTTPException(status_code=400, detail="End date must be after start date")
+            except Exception as e:
+                print(f"Error parsing dates for comparison: {e}")
 
     await trips_collection.update_one(
         {"_id": object_id}, {"$set": update_data}
@@ -257,6 +305,35 @@ async def get_map_data(
         itinerary_pins=itinerary_pins
     )
 
+@router.post("/{trip_id}/complete", status_code=status.HTTP_200_OK)
+async def complete_trip(
+    trip_id: str,
+    current_user: UserInDB = Depends(get_current_user)
+):
+    try:
+        object_id = ObjectId(trip_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid trip ID format")
+
+    trip = await trips_collection.find_one({"_id": object_id})
+    if trip is None or trip.get("owner_email") != current_user.email:
+        raise HTTPException(status_code=404, detail="Trip not found")
+
+    if trip.get("status") == "completed":
+        raise HTTPException(status_code=400, detail="Trip is already marked as completed")
+
+    await trips_collection.update_one(
+        {"_id": object_id},
+        {"$set": {"status": "completed"}}
+    )
+    
+    await users_collection.update_one(
+        {"email": current_user.email},
+        {"$inc": {"points": 50}}
+    )
+
+    return {"message": "Trip completed successfully. +50 points awarded!"}
+
 @router.get("/{trip_id}/hotels/search", response_model=List[HotelOffer])
 async def find_hotels_for_trip(
     trip_id: str,
@@ -278,3 +355,38 @@ async def find_hotels_for_trip(
         check_out_date=trip["end_date"].strftime('%Y-%m-%d'),
         adults=adults
     )
+
+@router.post("/{trip_id}/clone", status_code=status.HTTP_201_CREATED, response_model=TripResponse)
+async def clone_trip(
+    trip_id: str,
+    current_user: UserInDB = Depends(get_current_user)
+):
+    try:
+        object_id = ObjectId(trip_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid trip ID format")
+
+    original_trip = await trips_collection.find_one({"_id": object_id})
+    if original_trip is None:
+        raise HTTPException(status_code=404, detail="Trip not found")
+        
+    if not original_trip.get("is_public", False) and original_trip.get("owner_email") != current_user.email:
+        raise HTTPException(status_code=403, detail="Cannot clone a private trip you do not own")
+
+    cloned_data = dict(original_trip)
+    cloned_data.pop("_id", None)
+    cloned_data["owner_email"] = current_user.email
+    cloned_data["is_public"] = False
+    cloned_data["collaborators"] = []
+    
+    import uuid
+    for i in range(len(cloned_data.get("itinerary", []))):
+        cloned_data["itinerary"][i]["id"] = uuid.uuid4()
+        
+    for i in range(len(cloned_data.get("expenses", []))):
+        cloned_data["expenses"][i]["id"] = uuid.uuid4()
+
+    result = await trips_collection.insert_one(cloned_data)
+    cloned_trip = await trips_collection.find_one({"_id": result.inserted_id})
+
+    return TripResponse.model_validate(cloned_trip)

@@ -41,6 +41,12 @@ class ConnectionManager:
         """Removes a personal WebSocket connection."""
         if email in self.personal_connections:
             self.personal_connections[email].remove(websocket)
+            if not self.personal_connections[email]:
+                del self.personal_connections[email]
+
+    def is_user_online(self, email: str) -> bool:
+        """Returns True if the user currently has active personal websockets."""
+        return email in self.personal_connections and len(self.personal_connections[email]) > 0
 
     async def send_personal_message(self, message: str, email: str):
         """Sends a message to a specific user via all their active connections."""

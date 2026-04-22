@@ -1,9 +1,11 @@
 import { Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { useCurrency } from "../context/CurrencyContext";
 import logo from "./Gemini_Generated_Image_6gg4an6gg4an6gg4-modified.png";
 
 export const Navbar = () => {
   const { isAuthenticated, logout } = useAuth();
+  const { currency, setCurrency } = useCurrency();
   return (
     <nav className="bg-slate-800 text-gray-200 p-4 sticky top-0 z-50 border-b border-slate-700">
       <div className="container mx-auto flex justify-between items-center">
@@ -17,6 +19,9 @@ export const Navbar = () => {
               <Link to="/dashboard" className="font-medium hover:text-blue-600">
                 Dashboard
               </Link>
+              <Link to="/feed" className="font-bold text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-cyan-400 hover:scale-105 transition-transform">
+                WanderFeed
+              </Link>
               <Link to="/travel" className="font-medium hover:text-blue-600">
                 Travel
               </Link>
@@ -26,6 +31,14 @@ export const Navbar = () => {
               <Link to="/chat" className="font-medium hover:text-blue-600">
                 Messages
               </Link>
+              <select 
+                value={currency} 
+                onChange={(e) => setCurrency(e.target.value as 'USD' | 'INR')}
+                className="bg-slate-700 text-white rounded px-2 py-1 text-sm border border-slate-600 focus:outline-none focus:border-blue-500 cursor-pointer"
+              >
+                <option value="USD">USD ($)</option>
+                <option value="INR">INR (₹)</option>
+              </select>
               <button
                 onClick={logout}
                 className="bg-red-500 text-white hover:bg-red-600 px-4 py-2 rounded-md font-semibold transition-colors"

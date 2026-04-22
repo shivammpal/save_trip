@@ -5,12 +5,12 @@ import { LoginPage } from "./pages/LoginPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { RegisterPage } from "./pages/RegisterPage";
 import { ProtectedRoute } from "./components/ProtectedRoute";
-import { AuthCallbackPage } from "./pages/AuthCallbackPage";
 import { ProfilePage } from "./pages/ProfilePage";
 import { TravelPage } from "./pages/TravelPage";
 import { TripDetailsPage } from "./pages/TripDetailsPage";
 import { DocumentsPage } from "./pages/DocumentsPage";
 import { ChatPage } from "./pages/ChatPage";
+import { WanderFeedPage } from "./pages/WanderFeedPage";
 
 function App() {
   return (
@@ -20,7 +20,6 @@ function App() {
         <Route path="/" element={<HomePage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
-        <Route path="/auth/callback" element={<AuthCallbackPage />} />
         <Route
           path="/dashboard"
           element={
@@ -45,6 +44,7 @@ function App() {
             </ProtectedRoute>
           }
         />
+        <Route path="/feed" element={<ProtectedRoute><WanderFeedPage /></ProtectedRoute>} />
         <Route
           path="/trips/:tripId"
           element={

@@ -46,6 +46,9 @@ async def get_station_code(city_name: str) -> str:
             raise HTTPException(status_code=500, detail=f"Error fetching station code: {e}")
 
 async def search_trains(
+    origin: Optional[str] = None,
+    destination: Optional[str] = None,
+    departure_date: Optional[str] = None,
     train_number_date: Optional[str] = None,
     train_number_name: Optional[str] = None,
     max_price: Optional[int] = None
@@ -53,80 +56,119 @@ async def search_trains(
     """Search trains by status or info."""
     results = []
 
+    if origin and destination and departure_date:
+        import random
+        from datetime import datetime, timedelta
+        
+        # Use a seed based on search params so reloading the same search gives consistent results,
+        # but different routes/dates give completely different results.
+        seed_string = f"{origin.lower()}-{destination.lower()}-{departure_date}"
+        random.seed(seed_string)
+        
+        train_types = ["Express", "Superfast", "Passenger", "Mail", "Intercity"]
+        
+        try:
+            dep_dt = datetime.strptime(departure_date, "%Y-%m-%d")
+        except Exception:
+            dep_dt = datetime.now()
+            
+        num_trains = random.randint(3, 7)
+        for i in range(num_trains):
+            # Generate dynamic train numbers and names based on the cities
+            train_number = str(random.randint(11000, 22999))
+            
+            train_name = f"{origin.title()} {destination.title()} {random.choice(train_types)}"
+            if random.random() > 0.8:
+                train_name = f"{random.choice(['Rajdhani', 'Shatabdi', 'Duronto', 'Vande Bharat'])} (Via {origin.title()})"
+                
+            dep_hour = random.randint(4, 23)
+            dep_minute = random.choice([0, 5, 10, 15, 20, 30, 40, 45, 50])
+            dep_time_obj = dep_dt.replace(hour=dep_hour, minute=dep_minute)
+            
+            duration_hours = random.randint(3, 20)
+            duration_mins = random.randint(0, 59)
+            arr_time_obj = dep_time_obj + timedelta(hours=duration_hours, minutes=duration_mins)
+            
+            # Price proportional to duration
+            price_usd = round((duration_hours * 2.5) + random.uniform(5, 15), 2)
+            
+            if max_price is None or price_usd <= max_price:
+                results.append(
+                    TrainOffer(
+                        train_number=train_number,
+                        train_name=train_name,
+                        departure_time=dep_time_obj.strftime("%H:%M"),
+                        arrival_time=arr_time_obj.strftime("%H:%M"),
+                        duration=f"{duration_hours}h {duration_mins}m",
+                        available_classes=["1A", "2A", "3A", "SL"],
+                        price=price_usd,
+                        currency="USD"
+                    )
+                )
+                
+        # Reset seed so other random operations aren't affected
+        random.seed()
+
+    train_num_to_search = None
     if train_number_date:
-        # Parse train_number_date: e.g., "12345 2023-10-01"
         parts = train_number_date.split()
-        if len(parts) != 2:
-            return []
-        train_number, date_str = parts
-        # Convert YYYY-MM-DD to YYYYMMDD
-        y, m, d = date_str.split("-")
-        formatted_date = f"{y}{m}{d}"
+        if parts:
+            train_num_to_search = parts[0]
+    elif train_number_name:
+        train_num_to_search = train_number_name
 
-        params = {
-            "departure_date": formatted_date,
-            "isH5": "true",
-            "client": "web",
-            "deviceIdentifier": "Mozilla%20Firefox-138.0.0.0",
-            "train_number": train_number
+    if train_num_to_search:
+        url = "https://irctc-api2.p.rapidapi.com/trainSchedule"
+        headers = {
+            "x-rapidapi-host": "irctc-api2.p.rapidapi.com",
+            "x-rapidapi-key": settings.RAPIDAPI_KEY,
         }
+        params = {"trainNumber": train_num_to_search}
 
         async with httpx.AsyncClient() as client:
             try:
-                response = await client.get(TRAIN_STATUS_URL, headers=HEADERS, params=params)
+                response = await client.get(url, headers=headers, params=params)
                 response.raise_for_status()
                 data = response.json()
-                if data and data.get("data"):
-                    for train in data["data"]:
-                        price = round(random.uniform(50, 200), 2)
-                        currency = "USD"
-                        if max_price is None or price <= max_price:
-                            results.append(
-                                TrainOffer(
-                                    train_number=train.get("train_number", "N/A"),
-                                    train_name=train.get("train_name", "N/A"),
-                                    departure_time=train.get("departure_time", "N/A"),
-                                    arrival_time=train.get("arrival_time", "N/A"),
-                                    duration=train.get("duration", "N/A"),
-                                    available_classes=train.get("available_classes", []),
-                                    price=price,
-                                    currency=currency
-                                )
+                
+                if isinstance(data, list) and len(data) > 0:
+                    first_station = data[0]
+                    last_station = data[-1]
+                    
+                    dep_min_total = first_station.get("std_min", 0)
+                    arr_min_total = last_station.get("std_min", 0)
+                    
+                    dep_time_val = dep_min_total % (24 * 60)
+                    arr_time_val = arr_min_total % (24 * 60)
+                    
+                    dep_time = f"{dep_time_val // 60:02d}:{dep_time_val % 60:02d}"
+                    arr_time = f"{arr_time_val // 60:02d}:{arr_time_val % 60:02d}"
+                    
+                    duration_mins = arr_min_total - dep_min_total
+                    if duration_mins < 0:
+                        duration_mins = 0
+                    
+                    duration = f"{duration_mins // 60}h {duration_mins % 60}m"
+                    
+                    price = round(random.uniform(50, 200), 2)
+                    currency = "USD"
+                    
+                    if max_price is None or price <= max_price:
+                        results.append(
+                            TrainOffer(
+                                train_number=train_num_to_search,
+                                train_name=f"IRCTC Exp {train_num_to_search}",
+                                departure_time=dep_time,
+                                arrival_time=arr_time,
+                                duration=duration,
+                                available_classes=["1A", "2A", "3A", "SL"],
+                                price=price,
+                                currency=currency
                             )
-            except Exception:
-                pass
-
-    if train_number_name:
-        # For train info: trainnameOrnumber
-        params = {
-            "isH5": "true",
-            "client": "web"
-        }
-        url = f"{TRAIN_INFO_URL}/{train_number_name}"
-
-        async with httpx.AsyncClient() as client:
-            try:
-                response = await client.get(url, headers=HEADERS, params=params)
-                response.raise_for_status()
-                data = response.json()
-                if data and data.get("data"):
-                    for train in data["data"]:
-                        price = round(random.uniform(50, 200), 2)
-                        currency = "USD"
-                        if max_price is None or price <= max_price:
-                            results.append(
-                                TrainOffer(
-                                    train_number=train.get("train_number", "N/A"),
-                                    train_name=train.get("train_name", "N/A"),
-                                    departure_time=train.get("departure_time", "N/A"),
-                                    arrival_time=train.get("arrival_time", "N/A"),
-                                    duration=train.get("duration", "N/A"),
-                                    available_classes=train.get("available_classes", []),
-                                    price=price,
-                                    currency=currency
-                                )
-                            )
-            except Exception:
+                        )
+            except Exception as e:
+                import traceback
+                traceback.print_exc()
                 pass
 
     return results

@@ -12,6 +12,7 @@ class Document(BaseModel):
     # This will stop the validation error.
     original_filename: Optional[str] = None
     resource_type: Optional[str] = None
+    verification_status: str = Field("pending", description="pending, ai_verified, leader_verified")
     
     created_at: datetime = Field(default_factory=datetime.utcnow)
 

@@ -9,9 +9,8 @@ class Settings(BaseSettings):
     ALGORITHM: str
     ACCESS_TOKEN_EXPIRE_MINUTES: int
 
-    # --- Google OAuth Settings ---
-    GOOGLE_CLIENT_ID: str
-    GOOGLE_CLIENT_SECRET: str
+    # --- Firebase Settings ---
+    FIREBASE_CREDENTIALS_PATH: str
     
     GEOAPIFY_API_KEY: str
     

@@ -41,6 +41,9 @@ async def find_flights(
 
 @router.get("/trains/search", response_model=List[TrainOffer])
 async def find_trains(
+    origin: Optional[str] = Query(None),
+    destination: Optional[str] = Query(None),
+    departure_date: Optional[str] = Query(None),
     train_number_date: Optional[str] = Query(None),
     train_number_name: Optional[str] = Query(None),
     max_price: Optional[int] = Query(None),
@@ -48,6 +51,9 @@ async def find_trains(
 ):
     """Search trains by status or info."""
     return await search_trains(
+        origin=origin,
+        destination=destination,
+        departure_date=departure_date,
         train_number_date=train_number_date,
         train_number_name=train_number_name,
         max_price=max_price
